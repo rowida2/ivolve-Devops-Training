@@ -1,0 +1,21 @@
+# ---------- build stage ----------
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY app.js ./
+
+# ---------- runtime stage ----------
+FROM node:24-bookworm-slim
+ENV NODE_ENV=production
+WORKDIR /app
+
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
+COPY --from=build --chown=node:node /app ./
+USER node
+EXPOSE 3000
+CMD ["node", "app.js"]
