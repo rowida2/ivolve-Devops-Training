@@ -4,18 +4,6 @@
 #   ./run.sh         -> build and run everything
 #   ./run.sh clean   -> remove containers, networks, and volumes created by this lab
 
-set -e
-
-HOST_DATA_DIR="$HOME/backend-data"
-
-if [ "$1" = "clean" ]; then
-  echo "Cleaning up..."
-  docker rm -f frontend backend notification 2>/dev/null || true
-  docker network rm frontend-backend backend-notification 2>/dev/null || true
-  docker volume rm backend-logs notification-logs 2>/dev/null || true
-  echo "Done. (Host directory $HOST_DATA_DIR was kept on purpose.)"
-  exit 0
-fi
 
 # 1) Build images (run this script from inside the MicroserviceApp folder)
 echo "==> Building images"
