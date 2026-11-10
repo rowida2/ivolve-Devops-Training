@@ -118,30 +118,10 @@ resourcequota/ivolvequota created
 
 > **Takeaway:** `ivolveQuota` → `ivolvequota`. The same RFC 1123 rule applies to every Kubernetes object name (pods, services, namespaces, …).
 
-### 4.3 Task 3 — Fill the quota with three pods
+### 4.3  Fill the quota with three pods
 
 Three nginx pods are created in the `ivolve` namespace, each with the toleration required by the Lab 10 taint so it can run on `k8s-worker1`:
 
-```bash
-for i in 1 2 3; do
-cat <<YAML | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: pod$i
-  namespace: ivolve
-spec:
-  tolerations:
-    - key: workload
-      operator: Equal
-      value: ivolveApp
-      effect: NoSchedule
-  containers:
-    - name: nginx
-      image: nginx:alpine
-YAML
-done
-```
 
 ```
 pod/pod1 created
@@ -211,13 +191,7 @@ NAME          REQUEST     LIMIT   AGE
 ivolvequota   pods: 3/3           26s
 ```
 
-| Check | Expected | Observed |
-|---|---|---|
-| Namespace `ivolve` | `Active` | ✅ `ivolve   Active` |
-| Quota exists | `pods` hard limit `3` | ✅ `pods        0     3` at creation |
-| Quota usage after 3 pods | `3/3` | ✅ `ivolvequota   pods: 3/3` |
-| Pods running | 3 × `Running` | ✅ `pod1/pod2/pod3  1/1  Running` |
-| 4th pod | rejected with `Forbidden` | ✅ `exceeded quota: ivolvequota` |
+
 
 ---
 
@@ -246,35 +220,5 @@ kubectl apply -f ivolve-quota.yaml
 resourcequota/ivolvequota configured
 ```
 
-Because `kubectl apply` is idempotent, re-running it against an existing cluster reports `configured` (or `unchanged`) instead of failing — unlike `kubectl create`, which errors if the object already exists.
 
----
 
-## 7. Cleanup
-
-To remove everything created in this lab:
-
-```bash
-# remove the pods and quota, keep the namespace
-kubectl delete pods pod1 pod2 pod3 -n ivolve
-kubectl delete quota ivolvequota -n ivolve
-
-# or remove the namespace and all of its contents at once
-kubectl delete namespace ivolve
-```
-
-```
-namespace "ivolve" deleted
-```
-
-Deleting a namespace cascades to every object inside it — use with care on shared clusters.
-
----
-
-## 8. Key takeaways
-
-- **Namespaces are free logical isolation.** They scope names and access within one cluster; they are not virtual machines and provide no runtime isolation by themselves.
-- **Quotas are preventive, not advisory.** The API server rejects over-budget objects at creation time with `403 Forbidden` — nothing is scheduled and nothing needs cleanup.
-- **Object names must be lowercase RFC 1123.** `ivolveQuota` is invalid; `ivolvequota` is correct. The validation error names the exact regex.
-- **Quotas track `Used` vs `Hard`.** `kubectl describe resourcequota` is the quickest way to see how much of the budget is left.
-- **Combine quotas with taints/tolerations carefully.** In this lab the pods need the Lab 10 toleration to actually run on the tainted worker; a quota limits *how many* pods exist, while taints control *where* they may run.
