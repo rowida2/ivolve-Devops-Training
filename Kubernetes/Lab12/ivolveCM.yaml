@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ivolvecm
+  namespace: ivolve
+data:
+  DB_HOST: "mysql-headless"
+  DB_USER: "ivolve_user"
