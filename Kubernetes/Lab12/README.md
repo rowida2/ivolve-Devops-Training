@@ -386,6 +386,7 @@ kubectl delete pv mysql-pv --ignore-not-found=true
 sudo rm -rf /mnt/data/mysql
 ```
 
-## Result
+
+## Resulف
 
 MySQL was deployed in the `ivolve` namespace using a ConfigMap for non-sensitive settings and a Secret for credentials, backed by a PersistentVolume, PersistentVolumeClaim, and headless Service. The server responds to health checks, and database access was verified with both the root and application users.
