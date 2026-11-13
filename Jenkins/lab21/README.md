@@ -20,7 +20,7 @@ CI/CD pipeline that automatically:
 
 ```mermaid
 flowchart LR
-    A[GitHub<br/>DemoApp repo] --> B[Build App<br/>mvn package]
+    A[GitHub<br/>labs repo<br/>DemoApp + Dockerfile] --> B[Build App<br/>mvn package]
     B --> C[Build Docker Image]
     C --> D[Scan Image<br/>Trivy]
     D --> E[Push to Docker Hub]
@@ -47,17 +47,24 @@ flowchart LR
 
 ```text
 Jenkins/lab21/
-├── Jenkinsfile          # Declarative pipeline (all 7 required stages + post actions)
-├── deployment.yaml      # Kubernetes Deployment + NodePort Service
-└── README.md            # This document
+├── DemoApp/                 # Cloned lab application
+│   ├── Jenkinsfile          # Declarative pipeline (7 stages + post actions)
+│   ├── deployment.yaml      # Kubernetes Deployment + NodePort Service
+│   ├── Dockerfile           # Provided by the lab
+│   ├── pom.xml
+│   └── src/
+└── README.md                # This document
 ```
 
-The application source code is **not** copied into this repository. The pipeline
-clones it from the official lab repository at run time:
+The application and its `Dockerfile` were cloned from the official lab repository
+and committed under `DemoApp/`:
 
 ```text
 https://github.com/Ibrahim-Adel15/DemoApp.git
 ```
+
+Following the common convention, the `Jenkinsfile` lives in the root of the
+application folder, next to `pom.xml` and `Dockerfile`.
 
 ---
 
@@ -140,15 +147,18 @@ sudo -u jenkins -H trivy image --download-db-only
 
 | # | Stage | What it does |
 |---|-------|--------------|
-| 0 | `Checkout Source Code` | Clones the application repository into the `app/` directory |
 | 1 | `Build App` | `mvn -B clean package -DskipTests` → `target/demo-0.0.1-SNAPSHOT.jar` |
 | 2 | `Build Docker Image` | `docker build -t <user>/demoapp:<BUILD_NUMBER> .` |
 | 3 | `Scan Docker Image` | `trivy image --severity HIGH,CRITICAL` (report only) |
 | 4 | `Push to DockerHub` | `docker login` using `dockerhub-creds`, then `docker push` |
 | 5 | `Delete Local Image` | `docker rmi -f <image>` |
-| 6 | `Update Deployment File` | `sed` replaces the `image:` line in `Jenkins/lab21/deployment.yaml` |
+| 6 | `Update Deployment File` | `sed` replaces the `image:` line in `DemoApp/deployment.yaml` |
 | 7 | `Deploy to Kubernetes` | `kubectl apply -f`, then `kubectl rollout status` |
 | — | `post { always / success / failure }` | Logout from Docker Hub, print the build result and a stage-aware message |
+
+The source code is obtained by the **SCM checkout** of the job itself (Jenkins
+clones the repository, including `DemoApp/`, before the pipeline starts), so the
+stages map 1:1 to the seven steps required by the lab.
 
 ### Pipeline global configuration
 
@@ -158,8 +168,8 @@ environment {
     IMAGE_NAME      = "${DOCKERHUB_USER}/demoapp"
     IMAGE_TAG       = "${BUILD_NUMBER}"     // unique tag per build
     FULL_IMAGE      = "${IMAGE_NAME}:${IMAGE_TAG}"
-    APP_REPO        = 'https://github.com/Ibrahim-Adel15/DemoApp.git'
-    DEPLOYMENT_FILE = 'Jenkins/lab21/deployment.yaml'
+    APP_DIR         = 'Jenkins/lab21/DemoApp'
+    DEPLOYMENT_FILE = "${APP_DIR}/deployment.yaml"
 }
 ```
 
@@ -177,7 +187,7 @@ meaningful (instead of re-deploying the same `latest` image).
    - SCM: **Git**
    - Repository URL: `https://github.com/<your-user>/ivolve-Devops-Training.git`
    - Branch Specifier: `*/main`
-   - Script Path: `Jenkins/lab21/Jenkinsfile`
+   - Script Path: `Jenkins/lab21/DemoApp/Jenkinsfile`
 3. **Save** → **Build Now**.
 
 ---
@@ -234,17 +244,41 @@ curl http://$(minikube ip):30080
 
 ---
 
+## Troubleshooting
+
+| Problem | Cause / Fix |
+|---------|-------------|
+| `permission denied` on `/var/run/docker.sock` | `jenkins` user is not in the `docker` group → `sudo usermod -aG docker jenkins && sudo systemctl restart jenkins` |
+| `The connection to the server ... was refused` | The cluster is down → `minikube start --driver=docker` (it stops when WSL restarts) |
+| `ErrImagePull` / `ImagePullBackOff` | The image was not pushed, or the tag in `deployment.yaml` is wrong |
+| `unauthorized: incorrect username or password` | The Jenkins credential must contain a Docker Hub **access token**, not the account password |
+| Trivy scan is very slow | The vulnerability DB was not downloaded yet → run the *download-db-only* step once |
+| Build fails with `Killed` / OOM | Too little memory in WSL → start minikube with less memory (`minikube start --memory=2048mb`) and retry |
+
+---
 
 ## Cleanup
 
 ```bash
-kubectl delete -f Jenkins/lab21/deployment.yaml
+kubectl delete -f Jenkins/lab21/DemoApp/deployment.yaml
 docker logout
 ```
 
 ---
 
+## Screenshots
 
+<!-- Add the screenshots taken while running the lab, for example:
+
+![Jenkins pipeline stages](images/01-pipeline-stages.png)
+![Trivy scan report](images/02-trivy-scan.png)
+![Docker Hub image](images/03-dockerhub-image.png)
+![Kubernetes pods](images/04-kubectl-pods.png)
+![Application response](images/05-app-response.png)
+
+-->
+
+---
 
 ## Conclusion
 

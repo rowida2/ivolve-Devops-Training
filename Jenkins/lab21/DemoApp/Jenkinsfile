@@ -12,53 +12,46 @@ pipeline {
         IMAGE_NAME      = "${DOCKERHUB_USER}/demoapp"
         IMAGE_TAG       = "${BUILD_NUMBER}"
         FULL_IMAGE      = "${IMAGE_NAME}:${IMAGE_TAG}"
-        APP_REPO        = 'https://github.com/Ibrahim-Adel15/DemoApp.git'
-        DEPLOYMENT_FILE = 'Jenkins/lab21/deployment.yaml'
+
+        // The application source + Dockerfile are checked out by Jenkins (SCM checkout)
+        APP_DIR         = 'Jenkins/lab21/DemoApp'
+        DEPLOYMENT_FILE = "${APP_DIR}/deployment.yaml"
     }
 
     stages {
 
-        // 0) Get the application source code (from the official lab repo)
-        stage('Checkout Source Code') {
-            steps {
-                dir('app') {
-                    deleteDir()
-                    git branch: 'main', url: "${APP_REPO}"
-                }
-            }
-        }
-
         // 1) Build the Java application -> target/demo-0.0.1-SNAPSHOT.jar
-        stage('Build App') {
+        stage('1. Build App') {
             steps {
-                dir('app') {
+                dir("${APP_DIR}") {
                     sh 'mvn -B clean package -DskipTests'
+                    sh 'ls -lh target/*.jar'
                 }
             }
         }
 
-        // 2) Build the Docker image from the Dockerfile in the app folder
-        stage('Build Docker Image') {
+        // 2) Build the Docker image from the Dockerfile next to the application
+        stage('2. Build Docker Image') {
             steps {
-                dir('app') {
+                dir("${APP_DIR}") {
                     sh 'docker build -t "$FULL_IMAGE" .'
                     sh 'docker images "$IMAGE_NAME"'
                 }
             }
         }
 
-        // 3) Scan the image with Trivy (report only, do not fail the build)
-        stage('Scan Docker Image') {
+        // 3) Scan the image for HIGH/CRITICAL vulnerabilities (report only)
+        stage('3. Scan Docker Image') {
             steps {
                 sh 'trivy image --no-progress --severity HIGH,CRITICAL --format table "$FULL_IMAGE"'
             }
         }
 
-        // 4) Login to DockerHub with the Jenkins credential and push the image
-        stage('Push to DockerHub') {
+        // 4) Login to Docker Hub with the Jenkins credential, then push the image
+        stage('4. Push to DockerHub') {
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId:   'dockerhub-creds',
+                    credentialsId:    'dockerhub-creds',
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
@@ -70,8 +63,8 @@ pipeline {
             }
         }
 
-        // 5) Remove the image from the local Docker daemon (save disk space)
-        stage('Delete Local Image') {
+        // 5) Remove the image from the local Docker daemon to save disk space
+        stage('5. Delete Local Image') {
             steps {
                 sh 'docker rmi -f "$FULL_IMAGE" || true'
                 sh 'docker images "$IMAGE_NAME" || true'
@@ -79,7 +72,7 @@ pipeline {
         }
 
         // 6) Replace the image tag inside the Kubernetes deployment manifest
-        stage('Update Deployment File') {
+        stage('6. Update Deployment File') {
             steps {
                 sh '''
                     sed -i "s|image: .*|image: ${FULL_IMAGE}|" "$DEPLOYMENT_FILE"
@@ -89,8 +82,8 @@ pipeline {
             }
         }
 
-        // 7) Apply the manifest to the cluster and wait until the rollout is done
-        stage('Deploy to Kubernetes') {
+        // 7) Apply the manifest to the cluster and wait for the rollout to finish
+        stage('7. Deploy to Kubernetes') {
             steps {
                 sh '''
                     kubectl apply -f "$DEPLOYMENT_FILE"
@@ -107,10 +100,10 @@ pipeline {
             sh 'docker logout || true'
         }
         success {
-            echo "SUCCESS: image ${FULL_IMAGE} was built, scanned, pushed and deployed."
+            echo "SUCCESS: ${FULL_IMAGE} was built, scanned, pushed and deployed to Kubernetes."
         }
         failure {
-            echo "FAILURE: pipeline failed at stage [${env.STAGE_NAME}]. Check the logs above."
+            echo "FAILURE: pipeline failed at stage [${env.STAGE_NAME}]. Check the log above."
         }
     }
 }
