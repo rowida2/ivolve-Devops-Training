@@ -234,18 +234,6 @@ curl http://$(minikube ip):30080
 
 ---
 
-## Troubleshooting
-
-| Problem | Cause / Fix |
-|---------|-------------|
-| `permission denied` on `/var/run/docker.sock` | `jenkins` user is not in the `docker` group → `sudo usermod -aG docker jenkins && sudo systemctl restart jenkins` |
-| `The connection to the server ... was refused` | The cluster is down → `minikube start --driver=docker` (it stops when WSL restarts) |
-| `has no available image` / `ErrImagePull` | The image was not pushed, or the tag in `deployment.yaml` is wrong |
-| `unauthorized: incorrect username or password` | The Jenkins credential must contain a Docker Hub **access token**, not the account password |
-| Trivy scan is very slow | The vulnerability DB was not downloaded yet → run the *download-db-only* step once |
-| Build fails with `Killed` / OOM | Too little memory in WSL → reduce minikube memory (`minikube start --memory=2048mb`) and retry |
-
----
 
 ## Cleanup
 
@@ -256,19 +244,7 @@ docker logout
 
 ---
 
-## Screenshots
 
-<!-- Add the screenshots taken while running the lab, for example:
-
-![Jenkins pipeline stages](images/01-pipeline-stages.png)
-![Trivy scan report](images/02-trivy-scan.png)
-![Docker Hub image](images/03-dockerhub-image.png)
-![Kubernetes pods](images/04-kubectl-pods.png)
-![Application response](images/05-app-response.png)
-
--->
-
----
 
 ## Conclusion
 
