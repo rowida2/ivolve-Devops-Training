@@ -1,0 +1,116 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    environment {
+        DOCKERHUB_USER  = 'rehammm22'
+        IMAGE_NAME      = "${DOCKERHUB_USER}/demoapp"
+        IMAGE_TAG       = "${BUILD_NUMBER}"
+        FULL_IMAGE      = "${IMAGE_NAME}:${IMAGE_TAG}"
+        APP_REPO        = 'https://github.com/Ibrahim-Adel15/DemoApp.git'
+        DEPLOYMENT_FILE = 'Jenkins/lab21/deployment.yaml'
+    }
+
+    stages {
+
+        // 0) Get the application source code (from the official lab repo)
+        stage('Checkout Source Code') {
+            steps {
+                dir('app') {
+                    deleteDir()
+                    git branch: 'main', url: "${APP_REPO}"
+                }
+            }
+        }
+
+        // 1) Build the Java application -> target/demo-0.0.1-SNAPSHOT.jar
+        stage('Build App') {
+            steps {
+                dir('app') {
+                    sh 'mvn -B clean package -DskipTests'
+                }
+            }
+        }
+
+        // 2) Build the Docker image from the Dockerfile in the app folder
+        stage('Build Docker Image') {
+            steps {
+                dir('app') {
+                    sh 'docker build -t "$FULL_IMAGE" .'
+                    sh 'docker images "$IMAGE_NAME"'
+                }
+            }
+        }
+
+        // 3) Scan the image with Trivy (report only, do not fail the build)
+        stage('Scan Docker Image') {
+            steps {
+                sh 'trivy image --no-progress --severity HIGH,CRITICAL --format table "$FULL_IMAGE"'
+            }
+        }
+
+        // 4) Login to DockerHub with the Jenkins credential and push the image
+        stage('Push to DockerHub') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId:   'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push "$FULL_IMAGE"
+                    '''
+                }
+            }
+        }
+
+        // 5) Remove the image from the local Docker daemon (save disk space)
+        stage('Delete Local Image') {
+            steps {
+                sh 'docker rmi -f "$FULL_IMAGE" || true'
+                sh 'docker images "$IMAGE_NAME" || true'
+            }
+        }
+
+        // 6) Replace the image tag inside the Kubernetes deployment manifest
+        stage('Update Deployment File') {
+            steps {
+                sh '''
+                    sed -i "s|image: .*|image: ${FULL_IMAGE}|" "$DEPLOYMENT_FILE"
+                    echo "New image line in $DEPLOYMENT_FILE:"
+                    grep -n "image:" "$DEPLOYMENT_FILE"
+                '''
+            }
+        }
+
+        // 7) Apply the manifest to the cluster and wait until the rollout is done
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh '''
+                    kubectl apply -f "$DEPLOYMENT_FILE"
+                    kubectl rollout status deployment/demoapp --timeout=180s
+                    kubectl get pods -l app=demoapp -o wide
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "Pipeline finished with status: ${currentBuild.currentResult}"
+            sh 'docker logout || true'
+        }
+        success {
+            echo "SUCCESS: image ${FULL_IMAGE} was built, scanned, pushed and deployed."
+        }
+        failure {
+            echo "FAILURE: pipeline failed at stage [${env.STAGE_NAME}]. Check the logs above."
+        }
+    }
+}
