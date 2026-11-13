@@ -253,6 +253,7 @@ curl http://$(minikube ip):30080
 | `ErrImagePull` / `ImagePullBackOff` | The image was not pushed, or the tag in `deployment.yaml` is wrong |
 | `unauthorized: incorrect username or password` | The Jenkins credential must contain a Docker Hub **access token**, not the account password |
 | Trivy scan is very slow | The vulnerability DB was not downloaded yet → run the *download-db-only* step once |
+| `no space left on device` during the scan | `/tmp` is a small tmpfs in WSL → the pipeline points `TMPDIR` to `$WORKSPACE/.trivy-tmp` (disk-backed) |
 | Build fails with `Killed` / OOM | Too little memory in WSL → start minikube with less memory (`minikube start --memory=2048mb`) and retry |
 
 ---

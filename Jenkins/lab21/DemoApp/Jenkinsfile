@@ -43,7 +43,16 @@ pipeline {
         // 3) Scan the image for HIGH/CRITICAL vulnerabilities (report only)
         stage('3. Scan Docker Image') {
             steps {
-                sh 'trivy image --no-progress --severity HIGH,CRITICAL --format table "$FULL_IMAGE"'
+                sh '''
+                    mkdir -p "$WORKSPACE/.trivy-tmp"
+                    TMPDIR="$WORKSPACE/.trivy-tmp" trivy image \
+                        --skip-version-check \
+                        --scanners vuln \
+                        --no-progress \
+                        --severity HIGH,CRITICAL \
+                        --format table "$FULL_IMAGE"
+                    rm -rf "$WORKSPACE/.trivy-tmp"
+                '''
             }
         }
 
@@ -103,7 +112,7 @@ pipeline {
             echo "SUCCESS: ${FULL_IMAGE} was built, scanned, pushed and deployed to Kubernetes."
         }
         failure {
-            echo "FAILURE: pipeline failed at stage [${env.STAGE_NAME}]. Check the log above."
+            echo "FAILURE: the pipeline failed. Check the stage marked in red in the build log above."
         }
     }
 }
