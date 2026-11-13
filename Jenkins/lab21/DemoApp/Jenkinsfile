@@ -64,10 +64,12 @@ pipeline {
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh '''
-                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        docker push "$FULL_IMAGE"
-                    '''
+                    sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
+                    // Slow/flaky links can drop a layer upload; already-pushed layers
+                    // are skipped on the next attempt, so a retry is cheap.
+                    retry(3) {
+                        sh 'docker push "$FULL_IMAGE"'
+                    }
                 }
             }
         }

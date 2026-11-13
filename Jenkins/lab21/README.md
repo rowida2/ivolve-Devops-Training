@@ -50,7 +50,7 @@ Jenkins/lab21/
 ├── DemoApp/                 # Cloned lab application
 │   ├── Jenkinsfile          # Declarative pipeline (7 stages + post actions)
 │   ├── deployment.yaml      # Kubernetes Deployment + NodePort Service
-│   ├── Dockerfile           # Provided by the lab
+│   ├── Dockerfile           # Runtime image (slim JRE base)
 │   ├── pom.xml
 │   └── src/
 └── README.md                # This document
@@ -65,6 +65,13 @@ https://github.com/Ibrahim-Adel15/DemoApp.git
 
 Following the common convention, the `Jenkinsfile` lives in the root of the
 application folder, next to `pom.xml` and `Dockerfile`.
+
+> **Dockerfile adjustment.** The original lab `Dockerfile` used `maven:sapmachine`
+> as the *runtime* base, which produced a **737 MB** image because it ships a
+> full Maven + JDK toolchain that is never used at runtime. Since the pipeline
+> builds the JAR with Maven in stage 1, the runtime image only needs a JRE:
+> it now uses `eclipse-temurin:17-jre` (**~200 MB**). This keeps the Docker Hub
+> push short enough to survive a slow/unstable connection.
 
 ---
 
@@ -254,6 +261,8 @@ curl http://$(minikube ip):30080
 | `unauthorized: incorrect username or password` | The Jenkins credential must contain a Docker Hub **access token**, not the account password |
 | Trivy scan is very slow | The vulnerability DB was not downloaded yet → run the *download-db-only* step once |
 | `no space left on device` during the scan | `/tmp` is a small tmpfs in WSL → the pipeline points `TMPDIR` to `$WORKSPACE/.trivy-tmp` (disk-backed) |
+| `timeout awaiting response headers` during `docker push` | The connection is too slow for a large layer → the runtime image uses a slim JRE base and the push is wrapped in `retry(3)` (already-uploaded layers are skipped) |
+| Node stuck on *"Waiting for next available executor"* | Jenkins marked the built-in node offline because free space in `/tmp` dropped below 1 GiB → set `-Djava.io.tmpdir=/var/tmp/jenkins` in a systemd drop-in and restart Jenkins |
 | Build fails with `Killed` / OOM | Too little memory in WSL → start minikube with less memory (`minikube start --memory=2048mb`) and retry |
 
 ---

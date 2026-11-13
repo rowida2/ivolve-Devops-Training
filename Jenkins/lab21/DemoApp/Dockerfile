@@ -1,4 +1,5 @@
-FROM maven:sapmachine 
+# Runtime stage: lightweight JRE only (the Maven build already ran in the pipeline)
+FROM eclipse-temurin:17-jre
 
 # Set working directory in container
 WORKDIR /app
